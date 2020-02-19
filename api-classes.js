@@ -47,24 +47,74 @@ class StoryList {
     // TODO - Implement this functions!
     // this function should return the newly created story so it can be used in
     // the script.js file where it will be appended to the DOM
-    console.log(user, newStory);
     try {
-      const res = await axios.post(`${BASE_URL}/stories`, 
-        `{
-          "token"     : "${user.loginToken}",
-          "story":      { 
-              "author"  : "${newStory.author}",
-              "title"   : "${newStory.title}",
-              "url"     : "${newStory.url}"
-          }
-        }`
-      );
-      return res;
+      const response = await axios({
+        method: "POST",
+        url: `${BASE_URL}/stories`,
+        data: {
+          // request body
+          // this is the format specified by the API
+          token: user.loginToken,
+          story: newStory,
+        }
+      });
+      // const res = await axios.post(`${BASE_URL}/stories`, 
+      //   `{
+      //     "token"     : "${user.loginToken}",
+      //     "story":      { 
+      //         "author"  : "${newStory.author}",
+      //         "title"   : "${newStory.title}",
+      //         "url"     : "${newStory.url}"
+      //     }
+      //   }`
+      // );
+
+      
+      // Make a Story instance out of the story object we get back from API
+      newStory = new Story(response.data.story);
+      // add the story to the beggining of the stories list
+      this.stories.unshift(newStory);
+      // add the story to the beginning of the user's list
+      user.ownStories.unshift(newStory);
+      return newStory;
+
     } catch (error) {
       console.log("Error encountered when submitting a story. See error details: ", error)
     }
   }
+
+  async deleteStory(user, storyId) {
+    console.log("In deleteStory method");
+    try {
+        await axios({
+        url: `${BASE_URL}/stories/${storyId}`,
+        method: "DELETE",
+        data: {
+          token: user.loginToken
+        },
+      });
+      // Mentor:  using this format gave me a 401 return code. What is wrong with it?
+      // await axios.delete(`${BASE_URL}/stories/${storyId}`, 
+      //   {
+      //     "token" : this.loginToken
+      //   }
+      // );
+
+      // filter out the story whose ID we are removing
+      this.stories = this.stories.filter(story => story.storyId !== storyId);
+
+      // do the same thing for the user's list of stories
+      user.ownStories = user.ownStories.filter(story => story.storyId !== storyId);
+
+      return user;
+
+    } catch (error) {
+      console.log('Error occurred deleting a story. See error: ', error);
+    }
+
+  }
 }
+
 
 
 /**
@@ -168,15 +218,71 @@ class User {
     return existingUser;
   }
 
+  /** Update local User's data structures
+   * 
+   */
+
+  async updateLocalUserInfo() {
+    const response = await axios.get(`${BASE_URL}/users/${this.username}`,
+    {
+      params: {
+        token: this.loginToken
+      }
+    });
+    this.name = response.data.user.name;
+    this.createdAt = response.data.user.createdAt;
+    this.updatedAt = response.data.user.updatedAt;
+
+    // remember to conver the user's favorites and ownStories
+    // into instances of Story
+    this.favorites = response.data.user.favorites.map(s => new Story(s));
+    this.ownStories = response.data.user.stories.map(s => new Story(s));
+
+  }
+
   async addFavorite(storyId) {
-    console.log("in addFavorite method. storyId = ". storyId);
+    try {
+      console.log("storyId: ", storyId);
+      console.log("Login token: ", this.loginToken);
+      await axios.post(`${BASE_URL}/users/${this.username}/favorites/${storyId}`, 
+        {
+          "token" : this.loginToken
+        }
+     );
+     await this.updateLocalUserInfo();
+    //  return this;
+    } catch (error) {
+      console.log('Error occurred adding a new favorite. See error: ', error)
+    }
   }
 
   async removeFavorite(storyId) {
-    console.log("in removeFavorite. storyId = ", storyId);
-  }
-}
+    try {
+      console.log("storyId: ", storyId);
+      console.log("Login token: ", this.loginToken);
+      await axios({
+        url: `${BASE_URL}/users/${this.username}/favorites/${storyId}`,
+        method: 'DELETE',
+        data: {
+          token: this.loginToken
+        }
+      });
+      await this.updateLocalUserInfo();
+      // return this;
 
+      // Mentor Not sure why the following wouldn't work. Got 401 Not authorized.
+      //  I tried a number of ways of doing this using this format, with ${}, without ${}, with "" this this.loginToken without, etc.
+      // await axios.delete(`${BASE_URL}/users/${this.username}/favorites/${storyId}`,
+      //   `{
+      //     "token" : "${this.loginToken}"
+      //   }`
+      // );
+    } catch (error) {
+      console.log('Error occurred removing a favorite. See error: ', error);
+    }
+  }
+
+}
 /**
  * Class to represent a single story.
  */

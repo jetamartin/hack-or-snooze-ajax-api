@@ -14,6 +14,9 @@ $(async function() {
   const $navUserProfile = $("#nav-user-profile");
   const $navFavorites = $('#nav-favorites');
   const $navMyStories = $('#nav-my-stories');
+  const $favoritedArticlesList = $('#favorited-articles');
+  const $userProfile = $('#user-profile');
+ 
 
   
 
@@ -25,24 +28,35 @@ $(async function() {
 
   await checkIfLoggedIn();
 
+  $navUserProfile.on("click", function() {
+    // hide everything
+    hideElements();
+    // except the user profile
+    $userProfile.show();
+  });
 
-  // TODO (per Jet)
-
-
-  /** Event listener for submit on nav bar
-   *  When user clicks on navbar submit it opens (or closes)
-   * 
+ 
+   /**
+   * Event Handler for Navigation Submit
    */
-  $navSubmit.on("click", function (evt) {
-    $submitForm.trigger("reset");
-    $submitForm.toggle();
+
+  $navSubmit.on("click", function() {
+    if (currentUser) {
+      hideElements();
+      $allStoriesList.show();
+      $submitForm.slideToggle();
+    }
   });
 
   /** Event Listener for nav option to view only favorited stories 
    *   -- User must be logged in to get this view
    */
   $navFavorites.on('click', function (evt){
-    // TODO
+    hideElements();
+    if (currentUser) {
+      displayFavoritesList();
+      $favoritedArticlesList.show();
+    }
   });
 
   /** Event Listener for nav option to view only stories created by logged in user
@@ -50,7 +64,11 @@ $(async function() {
    */
 
   $navMyStories.on('click', function (evt) {
-    // TODO
+    hideElements();
+    if (currentUser) {
+      displayMyArticlesList();
+      $ownStories.show();
+    }
   });
 
  
@@ -70,6 +88,29 @@ $(async function() {
       };
       try {
         const newStoryInstance = await storyList.addStory(currentUser, newStory);
+        // generate markup for the new story
+        // Mentor: The solution guide includes the following line...don't think it's right
+        // <li id="${storyObject.storyId}" class="id-${storyObject.storyId}">
+        const $li = $(`
+          <li id="${newStoryInstance.storyId}">
+            <span class="star">
+              <i class="far fa-star"></i>
+            </span>
+            <a class="article-link" href="${newStory.url}" target="a_blank">
+              <strong>${newStory.title}</strong>
+            </a>
+            <small class="article-author">by ${newStory.author}</small>
+            <small class="article-hostname">(${getHostName(newStory.url)})</small>
+            <small class="article-username">posted by ${newStory.author}</small>
+          </li>
+        `);
+        // Add the new story to the UI
+        $allStoriesList.prepend($li);
+
+        // hide the form and reset it
+        $submitForm.slideUp("slow");
+        $submitForm.trigger("reset");
+
       } catch (error) {
         console.log("Could not create a new story. See error message: ", error);
       }
@@ -142,14 +183,19 @@ $(async function() {
     $allStoriesList.toggle();
   });
 
-  $allStoriesList.on('click', ".star", async function(evt) {
+
+
+  /** Favoriting Event Handler
+   *  
+   */
+  $(".articles-container").on('click', ".star", async function(evt) {
     const $starElem = $(evt.target);
     const $story = $(evt.target).closest("li"); 
     const storyId = $story.attr('id');
 
     if ($starElem.hasClass('far')) {  // Not favorited so add favorite
 
-      await currentUser.addfavorite(storyId);
+      await currentUser.addFavorite(storyId);
       $starElem.toggleClass('fas far');
 
     } else {  // Already favorited so remove favorite
@@ -159,7 +205,32 @@ $(async function() {
 
     }
     
-  })
+  });
+
+  /** Event listener for User to delete their own stories
+   * 
+   */
+  $ownStories.on('click', ".trash-can", async function(evt) {
+    if (currentUser) {
+      const trashElem = evt.target;
+      const $story = $(evt.target.closest("li"));
+      const storyId = $story.attr('id');
+      currentUser = await storyList.deleteStory(currentUser, storyId);
+
+          // re-generate the story list
+      await generateStories();
+
+      // hide everything
+      hideElements();
+
+      // ...except the story list
+      $allStoriesList.show();
+
+      // $myArticlesList.empty();
+      // displayMyArticlesList();
+    }
+  });
+
 
   /**
    * Event handler for Navigation to Homepage
@@ -188,6 +259,7 @@ $(async function() {
     await generateStories();
 
     if (currentUser) {
+      generateProfile();
       showNavForLoggedInUser();
     }
   }
@@ -210,6 +282,26 @@ $(async function() {
 
     // update the navigation bar
     showNavForLoggedInUser();
+
+    // get the user profile
+    generateProfile();
+  }
+
+  /**
+   * Build a user profile based on the global "user" instance
+   */
+
+  function generateProfile() {
+    // show your name
+    $("#profile-name").text(`Name: ${currentUser.name}`);
+    // show your username
+    $("#profile-username").text(`Username: ${currentUser.username}`);
+    // format and display the account creation date
+    $("#profile-account-date").text(
+      `Account Created: ${currentUser.createdAt.slice(0, 10)}`
+    );
+    // set the navigation to list the username
+    $navUserProfile.text(`${currentUser.username}`);
   }
 
   /**
@@ -227,23 +319,44 @@ $(async function() {
 
     // loop through all of our stories and generate HTML for them
     for (let story of storyList.stories) {
-      const result = generateStoryHTML(story);
+      const result = generateStoryHTML(story, false);
       $allStoriesList.append(result);
     }
   }
 
+  
+  /**
+   * Determine if the story is a user's favorite
+   * 
+   */
+   function storyIsFavorite(story) {
+     if (currentUser) {
+      let favoriteIds = currentUser.favorites.map(story => story.storyId); 
+      return favoriteIds.includes(story.storyId);
+     }
+ 
+   }
   /**
    * A function to render HTML for an individual Story instance
    */
 
-  function generateStoryHTML(story) {
+  function generateStoryHTML(story, isOwnStory) {
     let hostName = getHostName(story.url);
+
+    let trashCan = isOwnStory ? '<span class="trash-can"><i class="far fa-trash-alt"></i></span>' : "";
+
+    // If it is a favorit then star type will be 
+    let starType = "far fa-star";
+    if (storyIsFavorite(story) ) {
+      starType = "fas fa-star"
+    }
 
     // render story markup
     const storyMarkup = $(`
-      <li id="${story.storyId}">
+       <li id="${story.storyId}">
+       ${trashCan}
         <span class="star">
-          <i class="far fa-star"></i>
+          <i class="${starType}"></i>
         </span>
         <a class="article-link" href="${story.url}" target="a_blank">
           <strong>${story.title}</strong>
@@ -264,18 +377,53 @@ $(async function() {
       $submitForm,
       $allStoriesList,
       $filteredArticles,
+      $favoritedArticlesList,
       $ownStories,
       $loginForm,
-      $createAccountForm
+      $createAccountForm,
+      $userProfile
     ];
     elementsArr.forEach($elem => $elem.hide());
   }
 
   function showNavForLoggedInUser() {
+    $userProfile.hide();
     $navLogin.hide();
     $navWelcome.show();
     $navUserProfile.text(currentUser.username);
     $navLogOut.show();
+  }
+
+  function displayFavoritesList() {
+    $favoritedArticlesList.empty();
+    // if the user has no favorites
+    if (currentUser.favorites.length === 0) {
+      $favoritedArticlesList.append("<h5>No favorites added!</h5>");
+    } else {  // the user has at least one favorite article
+      // loop through all of favorite stories and generate HTML for them
+      for (let story of currentUser.favorites) {
+        const result = generateStoryHTML(story, false);
+        $favoritedArticlesList.append(result);
+      }
+    }
+  }
+
+  function displayMyArticlesList() {
+    $ownStories.empty();
+
+    // if the user has no stories that they have posted
+    if (currentUser.ownStories.length === 0) {
+      $ownStories.append("<h5>No stories added by user yet!</h5>");
+    } else {
+      // for all of the user's posted stories
+      for (let story of currentUser.ownStories) {
+        // render each story in the list
+        let res = generateStoryHTML(story, true);
+        $ownStories.append(res);
+      }
+    }
+
+    $ownStories.show();
   }
 
   /* simple function to pull the hostname from a URL */
