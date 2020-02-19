@@ -10,6 +10,7 @@ $(async function() {
   const $navLogin = $("#nav-login");
   const $navLogOut = $("#nav-logout");
 
+  const $mainNavLink = $('.main-nav-links')
   const $navWelcome = $("#nav-welcome");
   const $navUserProfile = $("#nav-user-profile");
   const $navFavorites = $('#nav-favorites');
@@ -18,8 +19,6 @@ $(async function() {
   const $userProfile = $('#user-profile');
  
 
-  
-
   // global storyList variable
   let storyList = null;
 
@@ -27,6 +26,11 @@ $(async function() {
   let currentUser = null;
 
   await checkIfLoggedIn();
+
+  /** Show user Profile when user clicks on their user name in nav bar 
+   *   - Show profile
+   *   - Hide list of stories
+   */
 
   $navUserProfile.on("click", function() {
     // hide everything
@@ -387,6 +391,7 @@ $(async function() {
   }
 
   function showNavForLoggedInUser() {
+    $mainNavLink.show();
     $userProfile.hide();
     $navLogin.hide();
     $navWelcome.show();

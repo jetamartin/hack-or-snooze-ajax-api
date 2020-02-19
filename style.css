@@ -44,9 +44,9 @@ nav {
   padding: 5px 20px;
   border-radius: 3px 3px 0 0;
 }
-
+/* Added display: none */
 .main-nav-links {
-  margin: 0 15px;
+   margin: 0 15px;
 }
 
 .nav-link {
