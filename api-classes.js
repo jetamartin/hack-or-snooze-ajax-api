@@ -24,15 +24,23 @@ class StoryList {
   // class directly. Why doesn't it make sense for getStories to be an instance method?
 
   static async getStories() {
-    // query the /stories endpoint (no auth required)
-    const response = await axios.get(`${BASE_URL}/stories`);
 
-    // turn the plain old story objects from the API into instances of the Story class
-    const stories = response.data.stories.map(story => new Story(story));
+    try {
+      // query the /stories endpoint (no auth required)
+      const response = await axios.get(`${BASE_URL}/stories`);
 
-    // build an instance of our own class using the new array of stories
-    const storyList = new StoryList(stories);
-    return storyList;
+      // turn the plain old story objects from the API into instances of the Story class
+      const stories = response.data.stories.map(story => new Story(story));
+
+      // build an instance of our own class using the new array of stories
+      const storyList = new StoryList(stories);
+      return storyList;
+
+    } catch (error) {
+      // TBD: throw a new error so error can be propagated to UI
+      console.log("getStories() request failed with the following error: ", error);
+    }
+
   }
 
   /**
@@ -79,6 +87,7 @@ class StoryList {
       return newStory;
 
     } catch (error) {
+      // TBD: throw a new error so error can be propagated to UI
       console.log("Error encountered when submitting a story. See error details: ", error)
     }
   }
@@ -106,9 +115,15 @@ class StoryList {
       // do the same thing for the user's list of stories
       user.ownStories = user.ownStories.filter(story => story.storyId !== storyId);
 
+      // do the same thing for the user's favorite list of stories
+      // Note: the following statement was left out of Springboard's solution and it created the following bug:
+      // 
+      user.favorites = user.favorites.filter(story => story.storyId !== storyId);
+
       return user;
 
     } catch (error) {
+      // TBD: throw a new error so error can be propagated to UI
       console.log('Error occurred deleting a story. See error: ', error);
     }
 
@@ -145,21 +160,28 @@ class User {
    */
 
   static async create(username, password, name) {
-    const response = await axios.post(`${BASE_URL}/signup`, {
-      user: {
-        username,
-        password,
-        name
-      }
-    });
+    try {
+      const response = await axios.post(`${BASE_URL}/signup`, {
+        user: {
+          username,
+          password,
+          name
+        }
+      });
+  
+      // build a new User instance from the API response
+      const newUser = new User(response.data.user);
+  
+      // attach the token to the newUser instance for convenience
+      newUser.loginToken = response.data.token;
+  
+      return newUser;
+      
+    } catch (error) {
+      // TBD: throw a new error so error can be propagated to UI
+      console.log("Create account request failed with the following error: ", error);
+    }
 
-    // build a new User instance from the API response
-    const newUser = new User(response.data.user);
-
-    // attach the token to the newUser instance for convenience
-    newUser.loginToken = response.data.token;
-
-    return newUser;
   }
 
   /* Login in user and return user instance.
@@ -169,24 +191,33 @@ class User {
    */
 
   static async login(username, password) {
-    const response = await axios.post(`${BASE_URL}/login`, {
-      user: {
-        username,
-        password
-      }
-    });
 
-    // build a new User instance from the API response
-    const existingUser = new User(response.data.user);
+    try {
+      const response = await axios.post(`${BASE_URL}/login`, {
+        user: {
+          username,
+          password
+        }
+      });
+  
+      // build a new User instance from the API response
+      const existingUser = new User(response.data.user);
+  
+      // instantiate Story instances for the user's favorites and ownStories
+      existingUser.favorites = response.data.user.favorites.map(s => new Story(s));
+      existingUser.ownStories = response.data.user.stories.map(s => new Story(s));
+  
+      // attach the token to the newUser instance for convenience
+      existingUser.loginToken = response.data.token;
+  
+      return existingUser;
 
-    // instantiate Story instances for the user's favorites and ownStories
-    existingUser.favorites = response.data.user.favorites.map(s => new Story(s));
-    existingUser.ownStories = response.data.user.stories.map(s => new Story(s));
+    } catch (error) {
+      // TBD: throw a new error so error can be propagated to UI
+      console.log("Create account request failed with the following error: ", error);
 
-    // attach the token to the newUser instance for convenience
-    existingUser.loginToken = response.data.token;
+    }
 
-    return existingUser;
   }
 
   /** Get user instance for the logged-in-user.
@@ -199,23 +230,28 @@ class User {
     // if we don't have user info, return null
     if (!token || !username) return null;
 
-    // call the API
-    const response = await axios.get(`${BASE_URL}/users/${username}`, {
-      params: {
-        token
-      }
-    });
+    try {
+      // call the API
+      const response = await axios.get(`${BASE_URL}/users/${username}`, {
+        params: {
+          token
+        }
+      });
+      // instantiate the user from the API information
+      const existingUser = new User(response.data.user);
 
-    // instantiate the user from the API information
-    const existingUser = new User(response.data.user);
+      // attach the token to the newUser instance for convenience
+      existingUser.loginToken = token;
 
-    // attach the token to the newUser instance for convenience
-    existingUser.loginToken = token;
+      // instantiate Story instances for the user's favorites and ownStories
+      existingUser.favorites = response.data.user.favorites.map(s => new Story(s));
+      existingUser.ownStories = response.data.user.stories.map(s => new Story(s));
+      return existingUser;
 
-    // instantiate Story instances for the user's favorites and ownStories
-    existingUser.favorites = response.data.user.favorites.map(s => new Story(s));
-    existingUser.ownStories = response.data.user.stories.map(s => new Story(s));
-    return existingUser;
+    } catch (error) {
+      // TBD: throw a new error so error can be propagated to UI
+      console.log("getLoggedInUser request failed with the following error: ", error);
+    }
   }
 
   /** Update local User's data structures
@@ -223,52 +259,68 @@ class User {
    */
 
   async updateLocalUserInfo() {
-    const response = await axios.get(`${BASE_URL}/users/${this.username}`,
-    {
-      params: {
-        token: this.loginToken
-      }
-    });
-    this.name = response.data.user.name;
-    this.createdAt = response.data.user.createdAt;
-    this.updatedAt = response.data.user.updatedAt;
 
-    // remember to conver the user's favorites and ownStories
-    // into instances of Story
-    this.favorites = response.data.user.favorites.map(s => new Story(s));
-    this.ownStories = response.data.user.stories.map(s => new Story(s));
+    try {
+      const response = await axios.get(`${BASE_URL}/users/${this.username}`,
+      {
+        params: {
+          token: this.loginToken
+        }
+      });
+      this.name = response.data.user.name;
+      this.createdAt = response.data.user.createdAt;
+      this.updatedAt = response.data.user.updatedAt;
+  
+      // remember to conver the user's favorites and ownStories
+      // into instances of Story
+      this.favorites = response.data.user.favorites.map(s => new Story(s));
+      this.ownStories = response.data.user.stories.map(s => new Story(s));
+      
+    } catch (error) {
+
+      // TBD: throw a new error so error can be propagated to UI
+      console.log("updateLocalUserInfo() request failed with the following error: ", error);
+    }
+
 
   }
 
   async addFavorite(storyId) {
     try {
-      console.log("storyId: ", storyId);
-      console.log("Login token: ", this.loginToken);
-      await axios.post(`${BASE_URL}/users/${this.username}/favorites/${storyId}`, 
+ 
+      const response = await axios.post(`${BASE_URL}/users/${this.username}/favorites/${storyId}`, 
         {
           "token" : this.loginToken
         }
-     );
+      );
+
+     // Don't see why updateLocalUserInfo() call below is needed if you use "response" from /favorites api call above
+     // to update local user record converting the user's favorites and own stories into instances of Story via:
+     // this.favorites = response.data.user.favorites.map(s => new Story(s));
+     // this.ownStories = response.data.user.stories.map(s => new Story(s));
      await this.updateLocalUserInfo();
-    //  return this;
+     return this;
     } catch (error) {
+      // TBD: throw a new error so error can be propagated to UI
       console.log('Error occurred adding a new favorite. See error: ', error)
     }
   }
 
   async removeFavorite(storyId) {
     try {
-      console.log("storyId: ", storyId);
-      console.log("Login token: ", this.loginToken);
-      await axios({
+      const response = await axios({
         url: `${BASE_URL}/users/${this.username}/favorites/${storyId}`,
         method: 'DELETE',
         data: {
           token: this.loginToken
         }
       });
+      // Don't see why updateLocalUserInfo() call below is needed if you use "response" from /favorites api call above
+      // to update local user record converting the user's favorites and own stories into instances of Story via:
+      // this.favorites = response.data.user.favorites.map(s => new Story(s));
+      // this.ownStories = response.data.user.stories.map(s => new Story(s));
       await this.updateLocalUserInfo();
-      // return this;
+      return this;
 
       // Mentor Not sure why the following wouldn't work. Got 401 Not authorized.
       //  I tried a number of ways of doing this using this format, with ${}, without ${}, with "" this this.loginToken without, etc.
@@ -278,6 +330,7 @@ class User {
       //   }`
       // );
     } catch (error) {
+      // TBD: throw a new error so error can be propagated to UI
       console.log('Error occurred removing a favorite. See error: ', error);
     }
   }

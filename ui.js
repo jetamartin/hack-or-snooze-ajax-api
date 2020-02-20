@@ -27,9 +27,9 @@ $(async function() {
 
   await checkIfLoggedIn();
 
-  /** Show user Profile when user clicks on their user name in nav bar 
-   *   - Show profile
-   *   - Hide list of stories
+  /** Show User Profile 
+   *   When the user clicks their login name it will display the user's profile  
+   *   info in lieu of any stories area of the UI
    */
 
   $navUserProfile.on("click", function() {
@@ -40,8 +40,8 @@ $(async function() {
   });
 
  
-   /**
-   * Event Handler for Navigation Submit
+   /** Display New stories form
+   *   - Display the form that users will need to complete to add a new story
    */
 
   $navSubmit.on("click", function() {
@@ -52,8 +52,9 @@ $(async function() {
     }
   });
 
-  /** Event Listener for nav option to view only favorited stories 
-   *   -- User must be logged in to get this view
+  /**  Display favorited stories list
+   *   - When the user clicks on the "Favorites" menu option in the Nav bar
+   *      display only the favorited stories in the stories area of the UI
    */
   $navFavorites.on('click', function (evt){
     hideElements();
@@ -63,8 +64,11 @@ $(async function() {
     }
   });
 
-  /** Event Listener for nav option to view only stories created by logged in user
-   *  -- User must be logged in to get this view
+  /** Dispaly users own stories
+   *  - When the user clicks on the "my stories" menu option on the nav bar it display 
+   *    only the stories that were created by the logged in user. If no stories have
+   *    been added by that user then a message will be dispplayed indicating that no 
+   *    stories currently exist. 
    */
 
   $navMyStories.on('click', function (evt) {
@@ -76,11 +80,12 @@ $(async function() {
   });
 
  
-  /** Event listener for nav bar to submit a new story via (#submit-form)
-   *  if user is logged in (user! = null)
-   * 
-   * 
-   */
+  /** Handle sumbit of the form to create a new story
+   *  - Retrieve values from the form and call methods that will ultmately add the new story to the domain model
+   *  - After form submission clear and hide the form from the UI
+   *  - if the story was successfully created then build the HTML for the new story and append it to the UI
+   *  
+   **/
   $submitForm.on("submit", async function(evt) {
     evt.preventDefault();
     if (currentUser) {  //check if user is logged in
@@ -90,23 +95,29 @@ $(async function() {
         title   : $('#title').val(),
         url     : $('#url').val() 
       };
+
       try {
         const newStoryInstance = await storyList.addStory(currentUser, newStory);
+        /**
+         * Mentor: Should I use a try catch here instead of simply checking for to see if newStoryInstance was returned
+         * If I use a try catch I could throw a new error and presume a try catch used here would catch it so that 
+         * more specific precise error info could be returned and displayed to user. Or is there yet a better way to handle this
+         **/ 
         // generate markup for the new story
         // Mentor: The solution guide includes the following line...don't think it's right
         // <li id="${storyObject.storyId}" class="id-${storyObject.storyId}">
         const $li = $(`
           <li id="${newStoryInstance.storyId}">
-            <span class="star">
-              <i class="far fa-star"></i>
-            </span>
-            <a class="article-link" href="${newStory.url}" target="a_blank">
-              <strong>${newStory.title}</strong>
-            </a>
-            <small class="article-author">by ${newStory.author}</small>
-            <small class="article-hostname">(${getHostName(newStory.url)})</small>
-            <small class="article-username">posted by ${newStory.author}</small>
-          </li>
+          <span class="star">
+            <i class="far fa-star"></i>
+          </span>
+          <a class="article-link" href="${newStory.url}" target="a_blank">
+            <strong>${newStory.title}</strong>
+          </a>
+          <small class="article-author">by ${newStory.author}</small>
+          <small class="article-hostname">(${getHostName(newStory.url)})</small>
+          <small class="article-username">posted by ${newStory.author}</small>
+        </li>
         `);
         // Add the new story to the UI
         $allStoriesList.prepend($li);
@@ -114,21 +125,23 @@ $(async function() {
         // hide the form and reset it
         $submitForm.slideUp("slow");
         $submitForm.trigger("reset");
-
       } catch (error) {
-        console.log("Could not create a new story. See error message: ", error);
+
+        // TBD create a user viewabe message in UI to indicate a user was not successfully added
+        console.log("Failure occured creating the new story. Check the log for error messages re: failure")
       }
-    } else {
+
+    } else {  // Nav menu to "submit" a new story shouldn't be available so we should never have this situation
+      // TBD create a message in UI
       console.log("User must be logged in to submit story");
     }
-  })
+  });
 
 
-  /**
-   * Event listener for logging in.
-  
+  /** Handle user login submit
+   *  - Retrieve username and password from login form and issue a call to login the user
    *  
-   */
+   **/
 
   $loginForm.on("submit", async function(evt) {
     evt.preventDefault(); // no page-refresh on submit
@@ -137,17 +150,23 @@ $(async function() {
     const username = $("#login-username").val();
     const password = $("#login-password").val();
 
-    // call the login static method to build a user instance
-    const userInstance = await User.login(username, password);
-    // set the global user to the user instance
-    currentUser = userInstance;
-    syncCurrentUserToLocalStorage();
-    loginAndSubmitForm();
+    try {
+      // call the login static method to build a user instance
+      const userInstance = await User.login(username, password);
+      // set the global user to the user instance
+      currentUser = userInstance;
+      syncCurrentUserToLocalStorage();
+      loginAndSubmitForm();
+    } catch (error) {
+      // TBD: Create an error message to be displayed in UI
+      console.log("User login failed");
+    }
   });
 
-  /**
-   * Event listener for signing up.
-   *  If successfully we will setup a new user instance
+  /** Create a new account for user
+   * .- Retrieve values from form
+   *  - Call method to create a new account
+   *  - if successful save user to local storage and close/reset the form and display all stories
    */
 
   $createAccountForm.on("submit", async function(evt) {
@@ -158,15 +177,23 @@ $(async function() {
     let username = $("#create-account-username").val();
     let password = $("#create-account-password").val();
 
-    // call the create method, which calls the API and then builds a new user instance
-    const newUser = await User.create(username, password, name);
-    currentUser = newUser;
-    syncCurrentUserToLocalStorage();
-    loginAndSubmitForm();
+    try {
+
+      // call the create method, which calls the API and then builds a new user instance
+      const newUser = await User.create(username, password, name);
+      // Mentor: Check for instance or use try catch and use thrown error from point of failure    
+      currentUser = newUser;
+      syncCurrentUserToLocalStorage();
+      loginAndSubmitForm();
+
+    } catch (error) {
+      // TBD: Create an error message to be displayed in UI
+      console.log("Failure: User account could not be created");
+    }
   });
 
-  /**
-   * Log Out Functionality
+  /** Log out user
+   * - Clear local storage and reload page
    */
 
   $navLogOut.on("click", function() {
@@ -176,8 +203,10 @@ $(async function() {
     location.reload();
   });
 
-  /**
-   * Event Handler for Clicking Login
+  /** Display Login and Create Account forms
+   *  - When user clicks "locgin/create user" nav bar option
+   *  - Show login and create account forms\\
+   *  - Hide the stories displayed on page
    */
 
   $navLogin.on("click", function() {
@@ -189,23 +218,41 @@ $(async function() {
 
 
 
-  /** Favoriting Event Handler
-   *  
+  /** Favorite/un-favorite a story
+   *  - if story is not already favorite then call method to favorite it and change UI empty star to solid star
+   *  - if story is already favorite then call method to unfavorite it and change UI solid star to empty star
    */
   $(".articles-container").on('click', ".star", async function(evt) {
     const $starElem = $(evt.target);
-    const $story = $(evt.target).closest("li"); 
+    const $story = $starElem.closest("li"); 
     const storyId = $story.attr('id');
 
     if ($starElem.hasClass('far')) {  // Not favorited so add favorite
+      try {
 
-      await currentUser.addFavorite(storyId);
-      $starElem.toggleClass('fas far');
+        await currentUser.addFavorite(storyId);
+        $starElem.toggleClass('fas far'); // Change star to solid star (i.e.,fas)
+
+      } catch (error) {
+
+        // Note: error should be displayed in UI rather than console
+        console.log("The following error occured while trying to favorite this article: ", error);
+      }
+
 
     } else {  // Already favorited so remove favorite
 
-     await currentUser.removeFavorite(storyId);
-      $starElem.toggleClass('fas far');
+      try {
+
+        await currentUser.removeFavorite(storyId);
+        $starElem.toggleClass('fas far'); // change solid star to star outline (i.e., far)
+
+      } catch (error) {
+
+        // Note: TBD create error message to be displayed in UI rather than console
+        console.log("The following error occured while trying to unfavorite this article: ", error);
+
+      }
 
     }
     
@@ -219,19 +266,27 @@ $(async function() {
       const trashElem = evt.target;
       const $story = $(evt.target.closest("li"));
       const storyId = $story.attr('id');
-      currentUser = await storyList.deleteStory(currentUser, storyId);
 
-          // re-generate the story list
-      await generateStories();
+      try {
 
-      // hide everything
-      hideElements();
+        currentUser = await storyList.deleteStory(currentUser, storyId);
 
-      // ...except the story list
-      $allStoriesList.show();
+        // re-generate the story list
+        await generateStories();
 
-      // $myArticlesList.empty();
-      // displayMyArticlesList();
+        // hide everything
+        hideElements();
+
+        // ...except the story list
+        $allStoriesList.show();
+        
+      } catch (error) {
+
+        // Note: TBD create error message to be displayed in UI rather than console
+        console.log("Error occured while deleting a story");
+        
+      }
+
     }
   });
 
@@ -256,15 +311,20 @@ $(async function() {
     const token = localStorage.getItem("token");
     const username = localStorage.getItem("username");
 
-    // if there is a token in localStorage, call User.getLoggedInUser
-    //  to get an instance of User with the right details
-    //  this is designed to run once, on page load
-    currentUser = await User.getLoggedInUser(token, username);
-    await generateStories();
+    try {
+      // if there is a token in localStorage, call User.getLoggedInUser
+      //  to get an instance of User with the right details
+      //  this is designed to run once, on page load
+      currentUser = await User.getLoggedInUser(token, username);
+      await generateStories();
 
-    if (currentUser) {
-      generateProfile();
-      showNavForLoggedInUser();
+      if (currentUser) {
+        generateProfile();
+        showNavForLoggedInUser();
+      }
+    } catch (error) {
+        // Note: TBD create error message to be displayed in UI rather than console
+        console.log("Error occured in API call from checkLoggedIn(), Error :", error);
     }
   }
 
@@ -314,17 +374,22 @@ $(async function() {
    */
 
   async function generateStories() {
-    // get an instance of StoryList
-    const storyListInstance = await StoryList.getStories();
-    // update our global variable
-    storyList = storyListInstance;
-    // empty out that part of the page
-    $allStoriesList.empty();
+    try {
+      // get an instance of StoryList
+      const storyListInstance = await StoryList.getStories();
+      // update our global variable
+      storyList = storyListInstance;
+      // empty out that part of the page
+      $allStoriesList.empty();
 
-    // loop through all of our stories and generate HTML for them
-    for (let story of storyList.stories) {
-      const result = generateStoryHTML(story, false);
-      $allStoriesList.append(result);
+      // loop through all of our stories and generate HTML for them
+      for (let story of storyList.stories) {
+        const result = generateStoryHTML(story, false);
+        $allStoriesList.append(result);
+      }
+    } catch (error) {
+      // Note: TBD create error message to be displayed in UI rather than console
+      console.log("Error occured in API call from checkLoggedIn(), Error :", error);
     }
   }
 
@@ -338,8 +403,7 @@ $(async function() {
       let favoriteIds = currentUser.favorites.map(story => story.storyId); 
       return favoriteIds.includes(story.storyId);
      }
- 
-   }
+    }
   /**
    * A function to render HTML for an individual Story instance
    */
